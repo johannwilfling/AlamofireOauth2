@@ -212,7 +212,48 @@ class OAuth2Client : NSObject {
         return result
     }
     
-
+    
+    func retrieveAuthTokenWithClientCredentials(token:((accessToken:String?) -> Void)) -> Void {
+        
+        // We found a token in the keychain, we need to check if it is not expired
+        if let optionalStoredAccessToken:String = self.retrieveAccessTokenFromKeychain() {
+            if (self.isAccessTokenExpired()) {
+                if let refreshToken = self.retrieveRefreshTokenFromKeychain() {
+                    self.refreshToken(refreshToken, newToken: token)
+                    return
+                }
+                print("WARNING: Access token is expired but no refresh token in keychain!")
+            } else {
+                token(accessToken: optionalStoredAccessToken)
+                return
+            }
+        }
+        
+        let url:String = self.oauth2Settings.tokenURL
+        
+        let parameters: [String:String] =
+        [
+            "client_id" : self.oauth2Settings.clientID,
+            "client_secret" : self.oauth2Settings.clientSecret,
+            "grant_type" : "client_credentials"
+        ]
+        
+        Alamofire.request(.POST,
+            url,
+            parameters: parameters,
+            encoding: Alamofire.ParameterEncoding.URL)
+            .responseJSON(completionHandler: { (response) -> Void in
+                switch response.result {
+                case .Success(let json):
+                    self.postRequestHandler(json, error: nil, token: token)
+                case .Failure(let error):
+                    self.postRequestHandler(nil, error: error, token: token)
+                }
+            })
+        
+    }
+    
+    
 }
 
 extension UIApplication {
